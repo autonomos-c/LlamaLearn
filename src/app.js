@@ -1,14 +1,32 @@
 const express = require('express');
 const path = require('path');
+const session = require('express-session');
+const dotenv = require('dotenv');
+
+// Cargar variables de entorno
+dotenv.config();
+
 const aiRoutes = require('./routes/aiRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
 const agentRoutes = require('./routes/agentRoutes');
+const classroomRoutes = require('./routes/classroomRoutes');
 
 const app = express();
 
 // Middleware para parsear JSON y datos de formulario
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Configurar sesiones
+app.use(session({
+    secret: process.env.SESSION_SECRET || 'your-secret-key',
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 24 * 60 * 60 * 1000 // 24 horas
+    }
+}));
 
 // Configurar CORS para desarrollo
 app.use((req, res, next) => {
@@ -26,6 +44,7 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 app.use('/api', uploadRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/agent', agentRoutes);
+app.use('/api/classroom', classroomRoutes);
 
 // Ruta principal
 app.get('/', (req, res) => {
@@ -37,7 +56,9 @@ app.use((err, req, res, next) => {
     console.error(err.stack);
     res.status(500).json({
         error: true,
-        message: 'Error interno del servidor'
+        message: process.env.NODE_ENV === 'development' 
+            ? err.message 
+            : 'Error interno del servidor'
     });
 });
 
@@ -52,5 +73,5 @@ app.use((req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Servidor corriendo en puerto ${PORT}`);
-    console.log(`Accede a http://localhost:${PORT} para subir archivos`);
+    console.log(`Accede a http://localhost:${PORT} para usar la aplicación`);
 });
