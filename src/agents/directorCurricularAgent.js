@@ -53,15 +53,18 @@ Basándote en el siguiente contenido curricular como base de conocimientos:
 
 ${this.knowledgeBase}
 
-Por favor, valida y analiza el siguiente contenido, considerando su alineación con el material curricular proporcionado:
+Realizar una clase con el material disponible.
+
+:
 
 "${prompt}"
 
-Proporciona un análisis detallado que incluya:
-1. Si el contenido está alineado con el material curricular
-2. Qué aspectos específicos del material curricular respaldan o contradicen el contenido
-3. Sugerencias para mejorar la alineación si es necesario
-`;
+Proporciona:
+1. Una guía para la clase de 15 minutos para los alumnos.
+2. Tema: Introducción a la educación financiera.
+3. Grado de los estudiantes segundo basico.
+4. Incluye actividades para el hogar. Sean simples y entretenidas, que podrian complemetar la clase. 
+5. Incluye una guia para el profesor.
 
       const response = await generateTextFromAiMl(validationPrompt, 500);
       return response;

@@ -1,7 +1,37 @@
-# Node.js dependencies
+# Dependencies
 node_modules/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment
 .env
+.venv
+env/
+venv/
+ENV/
 
 # Logs
+logs
 *.log
-logs/
+npm-debug.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Directory for uploaded files
+uploads/*
+!uploads/.gitkeep
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
