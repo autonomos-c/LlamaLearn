@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Subir PDFs</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .upload-form {
+            background-color: white;
+            border: 2px dashed #ccc;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .file-input {
+            margin: 10px 0;
+        }
+        .submit-btn {
+            background-color: #4CAF50;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        .submit-btn:hover {
+            background-color: #45a049;
+        }
+        .submit-btn:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        #status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 4px;
+            display: none;
+        }
+        .success {
+            background-color: #dff0d8;
+            color: #3c763d;
+            border: 1px solid #d6e9c6;
+        }
+        .error {
+            background-color: #f2dede;
+            color: #a94442;
+            border: 1px solid #ebccd1;
+        }
+        .file-list {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: white;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .file-list h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 10px 0;
+        }
+        .loading::after {
+            content: "⌛";
+            animation: loading 1s infinite;
+        }
+        @keyframes loading {
+            0% { content: "⌛"; }
+            50% { content: "⏳"; }
+        }
+    </style>
+</head>
+<body>
+    <h1>Subir Archivos PDF</h1>
+    <div class="upload-form">
+        <form id="uploadForm">
+            <div class="file-input">
+                <input type="file" name="pdfs" accept=".pdf" multiple required>
+            </div>
+            <button type="submit" class="submit-btn">Subir PDFs</button>
+        </form>
+        <div id="loading" class="loading">Subiendo archivos...</div>
+    </div>
+    <div id="status"></div>
+    <div id="fileList" class="file-list" style="display: none;">
+        <h3>Archivos PDF Disponibles</h3>
+        <ul id="files"></ul>
+    </div>
+
+    <script>
+        const uploadForm = document.getElementById('uploadForm');
+        const statusDiv = document.getElementById('status');
+        const loadingDiv = document.getElementById('loading');
+        const fileListDiv = document.getElementById('fileList');
+        const filesList = document.getElementById('files');
+        const submitButton = uploadForm.querySelector('button[type="submit"]');
+
+        function showStatus(message, isError = false) {
+            statusDiv.textContent = message;
+            statusDiv.className = isError ? 'error' : 'success';
+            statusDiv.style.display = 'block';
+        }
+
+        function updateFileList() {
+            fetch('/api/files')
+                .then(response => response.json())
+                .then(data => {
+                    if (!data.error && data.files.length > 0) {
+                        filesList.innerHTML = data.files
+                            .map(file => `<li>${file}</li>`)
+                            .join('');
+                        fileListDiv.style.display = 'block';
+                    } else {
+                        fileListDiv.style.display = 'none';
+                    }
+                })
+                .catch(error => console.error('Error al cargar la lista de archivos:', error));
+        }
+
+        uploadForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const files = formData.getAll('pdfs');
+            
+            if (files.length === 0) {
+                showStatus('Por favor, seleccione al menos un archivo PDF', true);
+                return;
+            }
+
+            // Validar tamaño y tipo de archivos
+            for (let file of files) {
+                if (file.size > 10 * 1024 * 1024) {
+                    showStatus(`El archivo ${file.name} excede el límite de 10MB`, true);
+                    return;
+                }
+                if (!file.type.includes('pdf')) {
+                    showStatus(`El archivo ${file.name} no es un PDF`, true);
+                    return;
+                }
+            }
+
+            loadingDiv.style.display = 'block';
+            submitButton.disabled = true;
+            statusDiv.style.display = 'none';
+            
+            try {
+                const response = await fetch('/api/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (!result.error) {
+                    showStatus('Archivos subidos exitosamente!');
+                    e.target.reset();
+                    updateFileList();
+                } else {
+                    showStatus(result.message || 'Error al subir archivos', true);
+                }
+            } catch (error) {
+                showStatus('Error de conexión al servidor', true);
+                console.error('Error:', error);
+            } finally {
+                loadingDiv.style.display = 'none';
+                submitButton.disabled = false;
+            }
+        });
+
+        // Cargar lista de archivos al iniciar
+        updateFileList();
+    </script>
+</body>
+</html>
