@@ -43,7 +43,6 @@ class DirectorCurricularAgent {
 
   async validateContent(prompt) {
     try {
-      // Cargar PDFs si aún no se han cargado
       if (!this.knowledgeBase) {
         await this.loadAllPdfs();
       }
@@ -55,16 +54,16 @@ ${this.knowledgeBase}
 
 Realizar una clase con el material disponible.
 
-:
-
+Contenido a validar:
 "${prompt}"
 
 Proporciona:
 1. Una guía para la clase de 15 minutos para los alumnos.
 2. Tema: Introducción a la educación financiera.
-3. Grado de los estudiantes segundo basico.
-4. Incluye actividades para el hogar. Sean simples y entretenidas, que podrian complemetar la clase. 
-5. Incluye una guia para el profesor.
+3. Grado de los estudiantes segundo básico.
+4. Incluye actividades para el hogar. Sean simples y entretenidas, que podrían complementar la clase. 
+5. Incluye una guía para el profesor.
+`;
 
       const response = await generateTextFromAiMl(validationPrompt, 500);
       return response;
@@ -74,7 +73,6 @@ Proporciona:
     }
   }
 
-  // Método para recargar la base de conocimientos
   async reloadKnowledgeBase() {
     this.knowledgeBase = '';
     await this.loadAllPdfs();

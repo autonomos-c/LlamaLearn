@@ -1,139 +1,60 @@
 const express = require('express');
 const router = express.Router();
 const classroomService = require('../services/google/classroomService');
+const credentials = require('../config/credentials/google-credentials');
 
-// Middleware para verificar autenticación
-const requireAuth = (req, res, next) => {
-    if (!req.session?.tokens) {
-        return res.status(401).json({ 
-            error: true, 
-            message: 'No autenticado',
-            authUrl: classroomService.getAuthUrl()
-        });
-    }
-    next();
-};
-
-// Ruta para iniciar autenticación
-router.get('/auth', (req, res) => {
-    const authUrl = classroomService.getAuthUrl();
-    res.json({ authUrl });
-});
-
-// Callback de autenticación
-router.get('/auth/callback', async (req, res) => {
+router.post('/init', (req, res) => {
     try {
-        const { code } = req.query;
-        const tokens = await classroomService.getTokenFromCode(code);
-        
-        // Guardar tokens en sesión
-        req.session.tokens = tokens;
-        
-        // Configurar credenciales en el servicio
-        await classroomService.setCredentials(tokens);
-        
-        res.json({ success: true, message: 'Autenticación exitosa' });
+        console.log('Iniciando autenticación de Google Classroom');
+        classroomService.initialize(credentials);
+        const authUrl = classroomService.getAuthUrl();
+        console.log('URL de autenticación generada:', authUrl);
+        res.json({ authUrl });
     } catch (error) {
-        console.error('Error en autenticación:', error);
-        res.status(500).json({ 
-            error: true, 
-            message: 'Error en autenticación' 
-        });
+        console.error('Error en /init:', error);
+        res.status(500).json({ error: 'Error al inicializar Classroom' });
     }
 });
 
-// Obtener cursos
-router.get('/courses', requireAuth, async (req, res) => {
+router.get('/oauth2callback', async (req, res) => {
+    const { code } = req.query;
+    
+    if (!code) {
+        console.error('No se proporcionó código de autorización');
+        return res.status(400).json({ error: 'Código no proporcionado' });
+    }
+
     try {
+        console.log('Procesando callback con código:', code);
+        await classroomService.getToken(code);
+        res.redirect('http://localhost:8501');
+    } catch (error) {
+        console.error('Error en callback OAuth:', error);
+        res.status(500).json({ error: 'Error en autenticación' });
+    }
+});
+
+router.get('/auth-status', (req, res) => {
+    try {
+        const isAuthenticated = classroomService.isAuthenticated();
+        console.log('Estado de autenticación:', isAuthenticated);
+        res.json({ isAuthenticated });
+    } catch (error) {
+        console.error('Error al verificar autenticación:', error);
+        res.status(500).json({ error: 'Error al verificar autenticación' });
+    }
+});
+
+router.get('/courses', async (req, res) => {
+    try {
+        await classroomService.refreshTokenIfNeeded();
+        console.log('Obteniendo lista de cursos');
         const courses = await classroomService.listCourses();
+        console.log('Cursos obtenidos:', courses);
         res.json({ courses });
     } catch (error) {
-        res.status(500).json({ 
-            error: true, 
-            message: error.message 
-        });
-    }
-});
-
-// Subir material a un curso
-router.post('/courses/:courseId/materials', requireAuth, async (req, res) => {
-    try {
-        const { courseId } = req.params;
-        const { title, description, filePath } = req.body;
-
-        // Subir archivo a Drive
-        const fileId = await classroomService.uploadPdfToDrive(filePath, title);
-
-        // Crear material en el curso
-        const material = await classroomService.createCourseMaterial(
-            courseId,
-            title,
-            description,
-            fileId
-        );
-
-        res.json({ 
-            success: true, 
-            material 
-        });
-    } catch (error) {
-        res.status(500).json({ 
-            error: true, 
-            message: error.message 
-        });
-    }
-});
-
-// Crear tarea
-router.post('/courses/:courseId/assignments', requireAuth, async (req, res) => {
-    try {
-        const { courseId } = req.params;
-        const { title, description, dueDate } = req.body;
-
-        const assignment = await classroomService.createAssignment(
-            courseId,
-            title,
-            description,
-            dueDate ? new Date(dueDate) : null
-        );
-
-        res.json({ 
-            success: true, 
-            assignment 
-        });
-    } catch (error) {
-        res.status(500).json({ 
-            error: true, 
-            message: error.message 
-        });
-    }
-});
-
-// Obtener estudiantes de un curso
-router.get('/courses/:courseId/students', requireAuth, async (req, res) => {
-    try {
-        const { courseId } = req.params;
-        const students = await classroomService.getStudents(courseId);
-        res.json({ students });
-    } catch (error) {
-        res.status(500).json({ 
-            error: true, 
-            message: error.message 
-        });
-    }
-});
-
-// Obtener profesores de un curso
-router.get('/courses/:courseId/teachers', requireAuth, async (req, res) => {
-    try {
-        const { courseId } = req.params;
-        const teachers = await classroomService.getTeachers(courseId);
-        res.json({ teachers });
-    } catch (error) {
-        res.status(500).json({ 
-            error: true, 
-            message: error.message 
-        });
+        console.error('Error al listar cursos:', error);
+        res.status(500).json({ error: 'Error al obtener cursos' });
     }
 });
 

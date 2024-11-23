@@ -3,145 +3,97 @@ const { OAuth2Client } = require('google-auth-library');
 
 class ClassroomService {
     constructor() {
-        this.oauth2Client = new OAuth2Client(
-            process.env.GOOGLE_CLIENT_ID,
-            process.env.GOOGLE_CLIENT_SECRET,
-            process.env.GOOGLE_REDIRECT_URI
+        this.oAuth2Client = null;
+        this.classroom = null;
+        this.tokens = null;
+    }
+
+    initialize(credentials) {
+        this.oAuth2Client = new OAuth2Client(
+            credentials.client_id,
+            credentials.client_secret,
+            credentials.redirect_uris[0]
         );
+    }
+
+    setCredentials(tokens) {
+        if (!this.oAuth2Client) {
+            throw new Error('OAuth2Client no inicializado');
+        }
         
-        this.classroom = google.classroom({ version: 'v1' });
-        this.drive = google.drive({ version: 'v3' });
+        this.tokens = tokens;
+        this.oAuth2Client.setCredentials(tokens);
+        this.classroom = google.classroom({ version: 'v1', auth: this.oAuth2Client });
+        
+        console.log('Credenciales establecidas correctamente');
     }
 
     getAuthUrl() {
-        return this.oauth2Client.generateAuthUrl({
+        if (!this.oAuth2Client) {
+            throw new Error('OAuth2Client no inicializado');
+        }
+
+        return this.oAuth2Client.generateAuthUrl({
             access_type: 'offline',
             scope: [
-                'https://www.googleapis.com/auth/classroom.courses',
-                'https://www.googleapis.com/auth/classroom.coursework.students',
-                'https://www.googleapis.com/auth/classroom.rosters',
-                'https://www.googleapis.com/auth/drive.file'
-            ]
+                'https://www.googleapis.com/auth/classroom.courses.readonly',
+                'https://www.googleapis.com/auth/classroom.coursework.me',
+                'https://www.googleapis.com/auth/classroom.coursework.students'
+            ],
+            prompt: 'consent'
         });
     }
 
-    async getTokenFromCode(code) {
-        const { tokens } = await this.oauth2Client.getToken(code);
-        return tokens;
-    }
+    async getToken(code) {
+        if (!this.oAuth2Client) {
+            throw new Error('OAuth2Client no inicializado');
+        }
 
-    async setCredentials(tokens) {
-        this.oauth2Client.setCredentials(tokens);
-        this.classroom = google.classroom({ version: 'v1', auth: this.oauth2Client });
-        this.drive = google.drive({ version: 'v3', auth: this.oauth2Client });
+        try {
+            console.log('Obteniendo tokens con código:', code);
+            const { tokens } = await this.oAuth2Client.getToken(code);
+            console.log('Tokens obtenidos:', tokens);
+            this.setCredentials(tokens);
+            return tokens;
+        } catch (error) {
+            console.error('Error al obtener tokens:', error);
+            throw error;
+        }
     }
 
     async listCourses() {
+        if (!this.classroom) {
+            throw new Error('Classroom API no inicializada');
+        }
+
         try {
+            console.log('Listando cursos...');
             const response = await this.classroom.courses.list({
                 pageSize: 10,
             });
+            console.log('Respuesta de cursos:', response.data);
             return response.data.courses || [];
         } catch (error) {
-            console.error('Error listing courses:', error);
-            throw new Error('Failed to list courses');
+            console.error('Error al listar cursos:', error);
+            throw error;
         }
     }
 
-    async uploadPdfToDrive(filePath, fileName) {
-        try {
-            const response = await this.drive.files.create({
-                requestBody: {
-                    name: fileName,
-                    mimeType: 'application/pdf',
-                },
-                media: {
-                    mimeType: 'application/pdf',
-                    body: require('fs').createReadStream(filePath),
-                },
-            });
-            return response.data.id;
-        } catch (error) {
-            console.error('Error uploading file to Drive:', error);
-            throw new Error('Failed to upload file to Drive');
-        }
+    isAuthenticated() {
+        return !!(this.oAuth2Client && this.tokens && this.classroom);
     }
 
-    async createCourseMaterial(courseId, title, description, fileId) {
-        try {
-            const response = await this.classroom.courses.courseWorkMaterials.create({
-                courseId: courseId,
-                requestBody: {
-                    title: title,
-                    description: description,
-                    materials: [
-                        {
-                            driveFile: {
-                                driveFile: {
-                                    id: fileId,
-                                },
-                                shareMode: 'VIEW',
-                            },
-                        },
-                    ],
-                    state: 'PUBLISHED',
-                },
-            });
-            return response.data;
-        } catch (error) {
-            console.error('Error creating course material:', error);
-            throw new Error('Failed to create course material');
-        }
-    }
-
-    async createAssignment(courseId, title, description, dueDate) {
-        try {
-            const response = await this.classroom.courses.courseWork.create({
-                courseId: courseId,
-                requestBody: {
-                    title: title,
-                    description: description,
-                    workType: 'ASSIGNMENT',
-                    state: 'PUBLISHED',
-                    dueDate: dueDate ? {
-                        year: dueDate.getFullYear(),
-                        month: dueDate.getMonth() + 1,
-                        day: dueDate.getDate(),
-                    } : undefined,
-                    dueTime: dueDate ? {
-                        hours: dueDate.getHours(),
-                        minutes: dueDate.getMinutes(),
-                    } : undefined,
-                },
-            });
-            return response.data;
-        } catch (error) {
-            console.error('Error creating assignment:', error);
-            throw new Error('Failed to create assignment');
-        }
-    }
-
-    async getStudents(courseId) {
-        try {
-            const response = await this.classroom.courses.students.list({
-                courseId: courseId,
-            });
-            return response.data.students || [];
-        } catch (error) {
-            console.error('Error getting students:', error);
-            throw new Error('Failed to get students');
-        }
-    }
-
-    async getTeachers(courseId) {
-        try {
-            const response = await this.classroom.courses.teachers.list({
-                courseId: courseId,
-            });
-            return response.data.teachers || [];
-        } catch (error) {
-            console.error('Error getting teachers:', error);
-            throw new Error('Failed to get teachers');
+    async refreshTokenIfNeeded() {
+        if (this.tokens && this.tokens.expiry_date && Date.now() >= this.tokens.expiry_date) {
+            try {
+                console.log('Refrescando token...');
+                const { tokens } = await this.oAuth2Client.refreshToken(this.tokens.refresh_token);
+                this.setCredentials(tokens);
+                console.log('Token refrescado exitosamente');
+            } catch (error) {
+                console.error('Error al refrescar token:', error);
+                throw error;
+            }
         }
     }
 }

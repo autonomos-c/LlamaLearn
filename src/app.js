@@ -53,7 +53,7 @@ app.get('/', (req, res) => {
 
 // Manejo de errores
 app.use((err, req, res, next) => {
-    console.error(err.stack);
+    console.error('Error:', err);
     res.status(500).json({
         error: true,
         message: process.env.NODE_ENV === 'development' 
@@ -66,7 +66,8 @@ app.use((err, req, res, next) => {
 app.use((req, res) => {
     res.status(404).json({
         error: true,
-        message: 'Ruta no encontrada'
+        message: 'Ruta no encontrada',
+        path: req.path
     });
 });
 
